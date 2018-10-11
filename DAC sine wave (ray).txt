@@ -1,0 +1,240 @@
+#include <asf.h>
+
+
+void clock_setup(void);
+void DAC_setup(void);
+void Port_setup();
+void wait(int t);
+
+int main (void)
+{
+	clock_setup();
+	Port_setup();
+	DAC_setup();
+	
+
+	volatile int j = 0;				
+	volatile int array[89]={0.27011064,			//array holding values to be converted
+2.672999102,
+7.552329774,
+14.88435513,
+24.63339049,
+36.75198763,
+51.18116581,
+67.85069875,
+86.67945644,
+107.5758,
+130.4380277,
+155.15487,
+181.6060309,
+209.6627735,
+239.1885467,
+270.0396497,
+302.0659313,
+335.1115208,
+369.0155865,
+403.6131186,
+438.7357321,
+474.2124866,
+509.8707181,
+545.5368793,
+581.0373842,
+616.1994532,
+650.8519539,
+684.8262337,
+717.9569412,
+750.0828304,
+781.0475457,
+810.7003831,
+838.8970233,
+865.5002343,
+890.3805393,
+913.4168466,
+934.4970395,
+953.5185215,
+970.3887156,
+985.0255153,
+997.3576838,
+1007.325201,
+1014.879555,
+1019.98398,
+1022.613631,
+1022.755712,
+1020.40953,
+1015.586504,
+1008.310108,
+998.6157551,
+986.550628,
+972.173447,
+955.5541854,
+936.7737285,
+915.9234801,
+893.1049175,
+868.4290979,
+842.0161176,
+813.9945275,
+784.5007078,
+753.6782036,
+721.6770272,
+688.6529269,
+654.7666298,
+620.1830594,
+585.0705325,
+549.5999406,
+513.9439176,
+478.2760002,
+442.7697828,
+407.5980728,
+372.9320497,
+338.9404316,
+305.7886546,
+273.6380671,
+242.6451449,
+212.9607292,
+184.7292932,
+158.0882382,
+133.1672251,
+110.0875436,
+88.96152178,
+69.89197908,
+52.97172631,
+38.28311369,
+25.89763018,
+15.87555545,
+8.265666585,
+3.10500062,
+0.418674329,
+};
+	
+	while(1)
+	{	
+		
+		for(int i=0; i<89; i++){
+			DAC->DATA.reg = array[j++];				//inputting values into the DATA register to be converted by DAC
+			wait(1);
+		}
+		j=0;
+	}
+}
+
+
+void clock_setup(){
+
+//setting up the clock source
+
+	/* Various bits in the INTFLAG register can be set to one at startup.
+	   This will ensure that these bits are cleared. User should clear bits before using corresponding interrupts p.176  */
+	SYSCTRL->INTFLAG.reg = SYSCTRL_INTFLAG_BOD33RDY | SYSCTRL_INTFLAG_BOD33DET | SYSCTRL_INTFLAG_DFLLRDY;
+
+
+//Setting the clock source 
+
+	
+	//SYSCTRL->OSC8M.reg |= SYSCTRL_OSC8M_FRANGE_2; //Frequency range contol 2= 6MHz-8MHz
+	SYSCTRL->OSC8M.bit.PRESC = 0; //Prescaler factor, will divide main clock by this factor  0 = divide by 1
+	SYSCTRL->OSC8M.reg |= SYSCTRL_OSC8M_ONDEMAND; // Will run main clock only when requested by peripheral p.152
+	SYSCTRL->OSC8M.reg |= SYSCTRL_OSC8M_ENABLE; //ENABLE 8mHZ CLOCK 
+	
+//Setting up the generic clock synchronization	
+	GCLK->CTRL.reg = GCLK_CTRL_SWRST; //Software reset started
+	while(GCLK->STATUS.reg == GCLK_STATUS_SYNCBUSY){}
+	
+	
+//Configuring generic clock generator	
+	GCLK->GENDIV.reg = 0<<0 | 1<<8;
+							//GENERATOR 0 SELECTION
+							//1 division bit set -> divide source by 1 p.114
+							
+			   
+	GCLK->GENCTRL.reg =  GCLK_GENCTRL_ID(0)  | GCLK_GENCTRL_RUNSTDBY | 0<<20 | GCLK_GENCTRL_OE | GCLK_GENCTRL_GENEN | GCLK_GENCTRL_SRC_OSC8M; 
+							//Generic clock generator 0 ID selected
+							//run in standby 
+							//0<<20 = divide Selection is generator source divided by GENDIV.DIV     
+							//Output enable   
+							//enable gen Clk ctr 
+							//8MHz clock source		
+		
+	while (GCLK->STATUS.bit.SYNCBUSY){}	//waiting for sync to complete
+	GCLK->CLKCTRL.reg |= 0<<14;	//disable clock	
+									
+					
+	//GCLK->CLKCTRL.reg = GCLK_CLKCTRL_ID_EIC | GCLK_CLKCTRL_CLKEN | GCLK_CLKCTRL_GEN_GCLK0;
+							//generic clock configured for EIC
+							//generic clock enable
+							//generic clock generator 0 selected
+
+	//GCLK->CLKCTRL.reg = GCLK_CLKCTRL_ID_ADC | GCLK_CLKCTRL_CLKEN | GCLK_CLKCTRL_GEN_GCLK0;
+							//generic clock configured for ADC
+							//generic clock enable
+							//generic clock generator 0 selected	
+
+	//GCLK->CLKCTRL.reg = GCLK_CLKCTRL_ID_SERCOM4_CORE | GCLK_CLKCTRL_CLKEN | GCLK_CLKCTRL_GEN_GCLK0;
+							//generic clock configured for Sercom4
+							//generic clock enable
+							//generic clock generator 0 selected
+							
+	GCLK->CLKCTRL.reg = GCLK_CLKCTRL_ID_DAC | GCLK_CLKCTRL_CLKEN | GCLK_CLKCTRL_GEN_GCLK0;						
+							//Generic clock setup for DAC
+	
+	while(GCLK->STATUS.reg == GCLK_STATUS_SYNCBUSY){}
+							//wait for synchronization of clocks to complete	
+	
+	
+//Setting up the Power Manager (CPU and clock buses AHB AND APB)
+	//PM->SLEEP.reg = PM_SLEEP_IDLE_APB;  
+	//CPU, AHB, AND APB Clock domains stopped until called
+	
+	PM->CPUSEL.reg = PM_CPUSEL_CPUDIV_DIV1;
+	//PRESCALER : DIVIDES THE MAIN CLOCK SOURCE BY 1, THIS IS CLOCK THAT RUNS CPU
+	PM->APBASEL.reg = PM_APBASEL_APBADIV_DIV1;
+	//PRESCALER: DIVIDES THE  MAIN CLOCK BY 1, THIS CLOCK RUNS THE APBA TO PERIPHERAL
+	PM->APBBSEL.reg = PM_APBBSEL_APBBDIV_DIV1; //no division
+	PM->APBCSEL.reg = PM_APBCSEL_APBCDIV_DIV1; //divide by 1
+	
+	//PM->APBAMASK.reg |= PM_APBAMASK_EIC;  //Enable EIC clock
+	PM->APBBMASK.reg |= PM_APBBMASK_PORT; //Enable Port io clock
+	//PM->APBCMASK.reg = PM_APBCMASK_SERCOM4; //Enable Sercom 4
+	PM->APBCMASK.reg |= 1<<16; //ADC clock enable
+	PM->APBCMASK.reg |= PM_APBCMASK_DAC;
+	
+}
+
+void DAC_setup()
+{
+	DAC->CTRLA.reg = DAC_CTRLA_SWRST;	//Software reset
+	while(DAC->STATUS.bit.SYNCBUSY);
+	
+	DAC->CTRLB.reg = DAC_CTRLB_REFSEL_AVCC | DAC_CTRLB_EOEN;
+	//AVCC reference
+	//Drive output to Vout pin
+	
+	DAC->CTRLA.reg = 1<<1;  //Enable DAC and run in standby
+	while(DAC->STATUS.reg == DAC_STATUS_SYNCBUSY);
+}
+
+
+
+void Port_setup()
+{
+	Port *ports = PORT_INSTS;
+	PortGroup *porA = &(ports->Group[0]);
+	
+	//DAC output setup
+	porA->DIRSET.reg = PORT_PA02;		//Set VOUT to output DAC output signal
+	porA->PMUX[1].bit.PMUXE = 0x1;		//Peripheral B enabled for DAC
+	porA->PINCFG[2].bit.PMUXEN = 0x1;	//Routed to pin 2
+	
+	
+}
+
+
+void wait(int t)
+{
+	volatile int count=0;
+	
+	count = 0;
+	while (count < t*1)
+	{
+		count++;
+	}
+}
